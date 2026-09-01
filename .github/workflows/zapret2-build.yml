@@ -1,5 +1,5 @@
 name: build-luci-app-zapret2-ipk
-run-name: Build luci-app-zapret2 .ipk (OpenWrt ${{ matrix.branch }})
+run-name: Build luci-app-zapret2 .ipk (OpenWrt SDK)
 
 on:
   workflow_dispatch:
