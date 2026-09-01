@@ -42,7 +42,17 @@ jobs:
       - name: Copy package into SDK
         working-directory: /builder
         run: |
-          cp -vr ${{ github.workspace }}/$REPO_NAME ./package/$REPO_NAME/
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          mkdir -p package/$REPO_NAME
+          if [ -d "$GITHUB_WORKSPACE/$REPO_NAME" ]; then
+            SRC="$GITHUB_WORKSPACE/$REPO_NAME"
+          elif [ -d "/github/workspace/$REPO_NAME" ]; then
+            SRC="/github/workspace/$REPO_NAME"
+          else
+            echo "Could not locate checkout of $REPO_NAME"; ls -la; exit 1
+          fi
+          echo "copying project from $SRC"
+          cp -va "$SRC"/. package/$REPO_NAME/
 
       - name: Init feeds
         working-directory: /builder
