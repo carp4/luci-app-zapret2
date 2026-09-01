@@ -42,7 +42,7 @@ jobs:
       - name: Copy package into SDK
         working-directory: /builder
         run: |
-          cp -vr $REPO_NAME ./package/$REPO_NAME/
+          cp -vr ${{ github.workspace }}/$REPO_NAME ./package/$REPO_NAME/
 
       - name: Init feeds
         working-directory: /builder
