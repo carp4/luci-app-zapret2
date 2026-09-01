@@ -31,6 +31,24 @@ It also provides basic control buttons:
 - Refresh
 - Copy current command / rules / config sections
 
+### DPI bypass strategies (Save & Apply)
+
+A dedicated section lets you select the DPI bypass techniques applied by
+`nfqws2`. Each enabled technique becomes an `NFQWS2_OPT` profile block:
+
+- **QUIC (HTTP/3) bypass** — UDP 443 / QUIC desync (`fake_default_quic`)
+- **TLS** — TLS ClientHello fake + multidisorder
+- **HTTP** — HTTP request fake + multisplit
+
+The section follows the **Save / Save & Apply** pattern rather than live
+toggles:
+
+- **Save** — writes the composed `NFQWS2_OPT` (and ensures
+  `NFQWS2_ENABLE=1`) to `/opt/zapret2/config`.
+- **Save & Apply** — writes the config and restarts the `zapret2` service.
+
+Nothing changes on the live engine until you press **Save & Apply**.
+
 ## Localization
 
 The panel is runtime-localized and currently supports:

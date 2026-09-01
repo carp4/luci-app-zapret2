@@ -5,8 +5,8 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-zapret2
-PKG_VERSION:=0.1.0
-PKG_RELEASE:=2
+PKG_VERSION:=0.2.0
+PKG_RELEASE:=1
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=Eduard Gushchin
 
@@ -17,6 +17,7 @@ LUCI_PKGARCH:=all
 define Package/$(PKG_NAME)/description
  Minimal LuCI panel for the upstream bol-van/zapret2 project.
  Expects /etc/init.d/zapret2 and /opt/zapret2/config to exist.
+ Adds DPI bypass strategy selection (incl. QUIC) with Save & Apply.
 endef
 
 define Package/$(PKG_NAME)/postinst

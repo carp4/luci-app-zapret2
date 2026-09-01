@@ -185,6 +185,34 @@ if (!window.__zapret2PanelStylesInjected) {
 		.z2-section + .z2-section {
 			margin-top: 4px;
 		}
+		.z2-strat-box {
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+		}
+		.z2-strat-row {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			padding: 10px 12px;
+			border: 1px solid var(--border-color-medium, rgba(255,255,255,.08));
+			border-radius: 10px;
+			background: var(--app-body-bg, rgba(255,255,255,.02));
+		}
+		.z2-strat-row input[type=checkbox] {
+			width: auto;
+			height: auto;
+		}
+		.z2-strat-row .z2-badge {
+			margin-left: auto;
+			padding: 3px 8px;
+			font-size: 11px;
+		}
+		.z2-save-note {
+			margin-top: 6px;
+			font-size: 12px;
+			opacity: .72;
+		}
 	`));
 }
 
@@ -318,6 +346,57 @@ function makeTextSection(title, subtitle, textareaNode, copyLabel, self) {
 	]);
 }
 
+/*
+ * Strategy catalog.
+ *
+ * Each DPI bypass technique maps to an nfqws2 `NFQWS2_OPT` profile block
+ * following the grammar used by bol-van/zapret2 config.default and
+ * blockcheck2.d. The QUIC profile is surfaced separately and is the
+ * HTTP/3 (UDP 443) bypass.
+ */
+var STRATEGY_CATALOG = [
+	{
+		id: 'tls',
+		labelEn: 'TLS fake + multidisorder',
+		labelRu: 'TLS fake + multidisorder',
+		enabled: true,
+		quic: false,
+		profile: '\n' +
+			'--filter-tcp=443 --filter-l7=tls <HOSTLIST> --payload=tls_client_hello --lua-desync=fake:blob=fake_default_tls:tcp_md5:tcp_seq=-10000 --lua-desync=multidisorder:pos=1,midsld'
+	},
+	{
+		id: 'http',
+		labelEn: 'HTTP fake + multisplit',
+		labelRu: 'HTTP fake + multisplit',
+		enabled: true,
+		quic: false,
+		profile: '\n' +
+			'--filter-tcp=80 --filter-l7=http <HOSTLIST> --payload=http_req --lua-desync=fake:blob=fake_default_http:tcp_md5 --lua-desync=multisplit:pos=method+2'
+	},
+	{
+		id: 'quic',
+		labelEn: 'QUIC (HTTP/3) bypass',
+		labelRu: 'QUIC (HTTP/3) обход',
+		enabled: true,
+		quic: true,
+		profile: '\n' +
+			'--filter-udp=443 --filter-l7=quic <HOSTLIST_NOAUTO> --payload=quic_initial --lua-desync=fake:blob=fake_default_quic:repeats=6'
+	}
+];
+
+function buildNfqwsOpt(checkedIds) {
+	var parts = [];
+	for (var i = 0; i < STRATEGY_CATALOG.length; i++) {
+		var strat = STRATEGY_CATALOG[i];
+		if (checkedIds.indexOf(strat.id) !== -1) {
+			parts.push(strat.profile);
+		}
+	}
+	if (!parts.length)
+		return '\t';
+	return '\n' + parts.join('\n--new') + '\n';
+}
+
 return view.extend({
 	load: function() {
 		return this.fetchData();
@@ -438,6 +517,34 @@ return view.extend({
 			'click': ui.createHandlerFn(this, function() { return self.updateStatus(); })
 		}, tr('Refresh', 'Обновить'));
 
+		this.strategyChecks = {};
+		for (var si = 0; si < STRATEGY_CATALOG.length; si++) {
+			(function(s) {
+				var cb = E('input', { 'type': 'checkbox', 'data-strat': s.id });
+				if (s.enabled)
+					cb.checked = true;
+				self.strategyChecks[s.id] = cb;
+			})(STRATEGY_CATALOG[si]);
+		}
+		var stratToggleRows = STRATEGY_CATALOG.map(function(s) {
+			return E('label', { 'class': 'z2-strat-row' }, [
+				self.strategyChecks[s.id],
+				' ',
+				tr(s.labelEn, s.labelRu),
+				s.quic ? E('span', { 'class': 'z2-badge z2-running' }, 'QUIC') : ''
+			]);
+		});
+		this.strategyBox = E('div', { 'class': 'z2-strat-box' }, stratToggleRows);
+
+		this.btnSave = E('button', {
+			'class': 'btn cbi-button-save important',
+			'click': ui.createHandlerFn(this, function() { return self.handleSaveConfig(false); })
+		}, tr('Save', 'Сохранить'));
+		this.btnSaveApply = E('button', {
+			'class': 'btn cbi-button-action important',
+			'click': ui.createHandlerFn(this, function() { return self.handleSaveConfig(true); })
+		}, tr('Save & Apply', 'Сохранить и применить'));
+
 		poll.add(function() {
 			return self.updateStatus();
 		}, 5);
@@ -484,6 +591,24 @@ return view.extend({
 				))
 			]),
 
+			E('div', { 'class': 'cbi-section' }, [
+				E('div', { 'class': 'z2-section-header' }, [
+					E('div', { 'class': 'z2-section-title' }, tr(
+						'DPI bypass strategies',
+						'Стратегии обхода DPI'
+					)),
+					E('div', { 'class': 'z2-note' }, tr(
+						'Select the bypass techniques, then Save (write config) or Save & Apply (write config and restart the service). No live changes happen until you apply.',
+						'Выберите техники обхода, затем «Сохранить» (записать конфиг) или «Сохранить и применить» (записать конфиг и перезапустить сервис). Ничего не меняется, пока вы не примените.'
+					))
+				]),
+				E('div', { 'class': 'cbi-section-node' }, [ this.strategyBox ]),
+				E('div', { 'class': 'cbi-section-node z2-actions' }, [
+					this.btnSave,
+					this.btnSaveApply
+				])
+			]),
+
 			makeTextSection(
 				tr('Active nfqws2 command', 'Активная команда nfqws2'),
 				tr('Current live command line of the running process.', 'Текущая живая командная строка процесса.'),
@@ -509,6 +634,72 @@ return view.extend({
 
 		this.applyData(data);
 		return page;
+	},
+
+	handleSaveConfig: function(apply) {
+		var self = this;
+
+		var checked = [];
+		for (var id in this.strategyChecks) {
+			if (this.strategyChecks[id].checked)
+				checked.push(id);
+		}
+		var opt = buildNfqwsOpt(checked);
+		var optLine = 'NFQWS2_OPT="' + opt + '"';
+		var enableLine = 'NFQWS2_ENABLE=1';
+
+		return fs.read('/opt/zapret2/config').catch(function() { return ''; }).then(function(current) {
+			var lines = (current || '').split('\n');
+			var out = [];
+			var inOpt = false;
+
+			for (var i = 0; i < lines.length; i++) {
+				var line = lines[i];
+
+				// drop the entire old NFQWS2_OPT multi-line quoted block,
+				// or a single-line NFQWS2_OPT="..." value
+				if (inOpt) {
+					if (line.trim() === '"')
+						inOpt = false;
+					continue;
+				}
+				if (/^NFQWS2_OPT=/.test(line)) {
+					if (!/="[^"]*"$/.test(line)) {
+						// opening quote not closed on this line -> multi-line block
+						inOpt = true;
+					}
+					continue;
+				}
+				// drop any existing enable line; a fresh one is appended below
+				if (/^NFQWS2_ENABLE=/.test(line)) {
+					continue;
+				}
+
+				out.push(line);
+			}
+
+			// append the fresh option + enable lines
+			out.push(optLine);
+			out.push(enableLine);
+
+			var body = out.join('\n') + '\n';
+			return fs.write('/opt/zapret2/config', body).then(function() {
+				ui.addNotification(null, E('p', tr(
+					'Config saved. Selected strategy: %s.',
+					'Конфиг сохранён. Выбранная стратегия: %s.'
+				).format(checked.join(', ') || tr('none', 'нет'))));
+				if (apply) {
+					return self.handleServiceAction('restart', null);
+				}
+				return true;
+			}).catch(function(err) {
+				ui.addNotification(null, E('p', tr(
+					'Unable to save config: %s',
+					'Не удалось сохранить конфиг: %s'
+				).format(err.message || err)));
+				return false;
+			});
+		});
 	},
 
 	handleSave: null,
