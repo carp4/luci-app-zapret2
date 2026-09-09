@@ -1,5 +1,11 @@
 # luci-app-zapret2
 
+> [!WARNING]
+> **This standalone project is no longer maintained.**
+> The LuCI panel is included in [CyberRouter](https://github.com/edwardgushchin/CyberRouter).
+> Use CyberRouter for the maintained router configuration and recovery tools.
+> This repository is archived for reference; no further updates are planned here.
+
 Minimal LuCI panel for the upstream **[`bol-van/zapret2`](https://github.com/bol-van/zapret2)** project on OpenWrt / GL.iNet routers.
 
 This repository provides a compact LuCI front-end for deployments based on **`zapret2`**. It does **not** replace or bundle the upstream project itself; it complements it with an operational web panel.
