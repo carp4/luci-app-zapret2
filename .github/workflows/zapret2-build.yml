@@ -16,7 +16,7 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     container:
-      image: openwrt/sdk:${{ matrix.arch }}-${{ matrix.branch }}
+      image: ghcr.io/openwrt/sdk:${{ matrix.arch }}-v${{ matrix.branch }}
       options: --user root
     strategy:
       fail-fast: false
