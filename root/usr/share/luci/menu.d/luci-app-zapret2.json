@@ -1,6 +1,6 @@
 {
-  "admin/services/zapret2": {
-    "title": "Zapret2",
+  "admin/services/video_optimizer": {
+    "title": "Traffic Engine",
     "order": 62,
     "action": {
       "type": "view",
