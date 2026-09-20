@@ -1,0 +1,23 @@
+#!/bin/sh
+# First-boot initialization for zapret2 on OpenWrt.
+# Creates /opt/zapret2/config from config.default if it does not exist,
+# ensures nftables (fw4) firewall logging the init script expects, and
+# removes the boot-time S-link (installed disabled / comes up "Off").
+
+ZAPRET_BASE="${ZAPRET_BASE:-/opt/zapret2}"
+ZAPRET_RW="${ZAPRET_RW:-$ZAPRET_BASE}"
+
+# create runtime config if missing
+if [ ! -f "$ZAPRET_RW/config" ]; then
+	cp -f "$ZAPRET_BASE/config.default" "$ZAPRET_RW/config"
+	chmod 0644 "$ZAPRET_RW/config"
+fi
+
+# make sure fd/nftables firewall init is present
+[ -x "$ZAPRET_BASE/init.d/openwrt/firewall.zapret2" ] || true
+
+# disabled by default: rm the rc.d S-link the image bakes in (START=21).
+# First boot therefore comes up "Off"; the LuCI panel's enable re-creates it.
+[ -L /etc/rc.d/S21zapret2 ] && /etc/init.d/zapret2 disable 2>/dev/null
+
+exit 0

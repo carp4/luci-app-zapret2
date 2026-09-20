@@ -1,120 +1,44 @@
-# luci-app-zapret2
+# luci-app-zapret2 + zapret2 (single feed repo)
 
-Minimal LuCI panel for the upstream **[`bol-van/zapret2`](https://github.com/bol-van/zapret2)** project on OpenWrt / GL.iNet routers.
+Two OpenWrt packages, one repo. Use this repo directly as an
+OpenWrt feed — no wrapper feed needed.
 
-This repository provides a compact LuCI front-end for deployments based on **`zapret2`**. It does **not** replace or bundle the upstream project itself; it complements it with an operational web panel.
+- **zapret2/** — thin packaging shim for upstream
+  [bol-van/zapret2](https://github.com/bol-van/zapret2). Zero engine
+  code: downloads the upstream release tarball, builds `nfqws2`
+  from source, installs the stock runtime to `/opt/zapret2`.
+  Installs disabled (first boot comes up Off).
+- **luci-app-zapret2/** — LuCI panel ("Services → Traffic Engine")
+  plus all UX: speed comparison, UCI-owned config, default host
+  list, `zapret2-speedtest` backend, nft counter tagging.
+  Depends on `zapret2` (pulls the engine automatically).
 
-Originally built and tested on:
-- **GL.iNet Flint 2 (GL-MT6000)**
-- **OpenWrt 25.12.2**
-- manual `zapret2` install in **`/opt/zapret2`**
-- init service at **`/etc/init.d/zapret2`**
+## Firmware builders
 
-## What it shows
-
-Menu path:
-- **Services → Zapret2**
-
-The panel displays:
-- service state;
-- autorun state;
-- running instance count;
-- PIDs;
-- `nfqws2` version;
-- active `nfqws2` command line;
-- current queue rules (`list_table` output);
-- current `/opt/zapret2/config`.
-
-It also provides basic control buttons:
-- Enable / Disable autorun
-- Start / Restart / Stop
-- Refresh
-- Copy current command / rules / config sections
-
-### DPI bypass strategies (Save & Apply)
-
-A dedicated section lets you select the DPI bypass techniques applied by
-`nfqws2`. Each enabled technique becomes an `NFQWS2_OPT` profile block:
-
-- **QUIC (HTTP/3) bypass** — UDP 443 / QUIC desync (`fake_default_quic`)
-- **TLS** — TLS ClientHello fake + multidisorder
-- **HTTP** — HTTP request fake + multisplit
-
-The section follows the **Save / Save & Apply** pattern rather than live
-toggles:
-
-- **Save** — writes the composed `NFQWS2_OPT` (and ensures
-  `NFQWS2_ENABLE=1`) to `/opt/zapret2/config`.
-- **Save & Apply** — writes the config and restarts the `zapret2` service.
-
-Nothing changes on the live engine until you press **Save & Apply**.
-
-## Localization
-
-The panel is runtime-localized and currently supports:
-- **English** — default/base language
-- **Russian** — automatically selected when the current LuCI / browser locale starts with `ru`
-
-There is no manual language switch in the panel itself.
-The UI language is chosen automatically from the current LuCI page language (with browser locale as fallback).
-
-## Important scope
-
-This package is a **LuCI companion panel for the upstream `bol-van/zapret2` project**.
-It is **not** a full-featured upstream GUI for `zapret2`, and it does not attempt to replace the upstream runtime or its strategy tooling.
-
-It is meant for setups where:
-- upstream `zapret2` is already installed manually;
-- config lives in `/opt/zapret2/config`;
-- LuCI only needs status + basic control + visibility into the active runtime.
-
-## Requirements
-
-The panel expects the following paths to exist on the router:
-- `/etc/init.d/zapret2`
-- `/opt/zapret2/config`
-- `/opt/zapret2/nfq2/nfqws2`
-
-## Repository layout
-
-```text
-.
-├─ htdocs/
-│  └─ luci-static/resources/view/zapret2/status.js
-├─ root/
-│  └─ usr/share/
-│     ├─ luci/menu.d/luci-app-zapret2.json
-│     └─ rpcd/acl.d/luci-app-zapret2.json
-├─ Makefile
-└─ README.md
+```
+echo "src-git zapret2 https://github.com/carp4/luci-app-zapret2.git" >> feeds.conf.default
+./scripts/feeds update zapret2
+./scripts/feeds install -a -p zapret2
 ```
 
-## Buildroot packaging
+Then `make menuconfig`: Network → Zapret → zapret2,
+LuCI → Services → Traffic Engine.
 
-This repository is structured like a standard LuCI package.
-You can place it into an OpenWrt feed or package tree and build it with the rest of the image.
+## Stock devices (no build tree)
 
-## Manual installation on a running router
+See Releases: download both `.apk` (25.12) / `.ipk` (24.10)
+for your arch and install together:
 
-If you only want to install the panel files on a router that already has `zapret2`, copy these files:
-- `root/usr/share/luci/menu.d/luci-app-zapret2.json` → `/usr/share/luci/menu.d/`
-- `root/usr/share/rpcd/acl.d/luci-app-zapret2.json` → `/usr/share/rpcd/acl.d/`
-- `htdocs/luci-static/resources/view/zapret2/status.js` → `/www/luci-static/resources/view/zapret2/`
-
-Then reload LuCI components:
-
-```sh
-rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true
-/etc/init.d/rpcd reload || /etc/init.d/rpcd restart
-/etc/init.d/uhttpd reload || /etc/init.d/uhttpd restart
+```
+apk add --allow-untrusted ./zapret2-*.apk ./luci-app-zapret2-*.apk
+opkg install ./zapret2_*.ipk ./luci-app-zapret2_*.ipk
 ```
 
-## Notes
+Engine installs disabled. Enable via the panel or
+`/etc/init.d/zapret2 enable && /etc/init.d/zapret2 start`.
 
-- This panel is intentionally read-mostly, with only basic service control.
-- It does not try to edit `zapret2` strategy internals yet.
-- It assumes LuCI JS views and rpcd ACLs available on modern OpenWrt builds.
+## Tracking upstream
 
-## License
-
-MIT
+Bump `zapret2/Makefile` (`PKG_VERSION` + `PKG_HASH` together,
+`PKG_RELEASE` resets to 1) to track upstream releases.
+No engine rebase ever: the shim holds packaging only.
