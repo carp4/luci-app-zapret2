@@ -950,7 +950,9 @@ return view.extend({
 	},
 
 	rebuildSpeedIfaceSelect: function() {
-		// Rebuild the speed-test select from the CURRENTLY CHECKED devices.
+		// Rebuild the speed-test select from ALL discovered devices,
+		// independent of the checked (deploy-scope) boxes: the test must
+		// also cover uplinks that are currently not optimized.
 		// Down devices stay listed (per decision: all configured + (down)
 		// marker) but are not selectable.
 		var self = this;
@@ -965,8 +967,6 @@ return view.extend({
 		ph.selected = true;
 		select.appendChild(ph);
 		(this.ifaceRows || []).forEach(function(r) {
-			if (!(r.cb && r.cb.checked))
-				return;
 			var opt = E('option', { 'value': r.device },
 				self.ifaceLabel(r) + (r.up ? '' : ' (' + tr('down', 'не в сети') + ')'));
 			if (!r.up)
