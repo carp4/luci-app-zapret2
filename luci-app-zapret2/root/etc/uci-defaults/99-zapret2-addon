@@ -1,0 +1,7 @@
+#!/bin/sh
+# First-boot addon policy for luci-app-zapret2.
+# Covers engines not shipped by our own feed package (e.g. a foreign or
+# future stock zapret2): ensure the DPI engine does not run until the
+# user opts in via Services -> Traffic Engine.
+[ -L /etc/rc.d/S21zapret2 ] && /etc/init.d/zapret2 disable 2>/dev/null
+exit 0
