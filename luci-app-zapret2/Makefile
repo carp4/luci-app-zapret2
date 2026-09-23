@@ -6,12 +6,12 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-zapret2
 PKG_VERSION:=0.2.0
-PKG_RELEASE:=21
+PKG_RELEASE:=22
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=Eduard Gushchin
 
 LUCI_TITLE:=LuCI panel for the upstream bol-van/zapret2 project
-LUCI_DEPENDS:=+kmod-nfnetlink-queue +rpcd +zapret2
+LUCI_DEPENDS:=+kmod-nfnetlink-queue +rpcd +zapret2 +jq
 LUCI_PKGARCH:=all
 
 define Package/$(PKG_NAME)/description

@@ -2,7 +2,6 @@
 'require view';
 'require rpc';
 'require fs';
-'require poll';
 'require ui';
 'require uci';
 'require request';
@@ -1363,6 +1362,10 @@ return view.extend({
 			'class': 'btn cbi-button-action important',
 			'click': ui.createHandlerFn(this, function() { return self.handleSaveConfig(true); })
 		}, tr('Save & Apply', 'Сохранить и применить'));
+		this.btnRefresh = E('button', {
+			'class': 'btn cbi-button-neutral',
+			'click': ui.createHandlerFn(this, function() { return self.updateStatus(); })
+		}, tr('Refresh', 'Обновить'));
 
 		this.hostListBox = E('div', { 'class': 'z2-hostlist-box' });
 		this.hostRows = [];
@@ -1391,10 +1394,6 @@ return view.extend({
 			])
 		]);
 
-		poll.add(function() {
-			return self.updateStatus();
-		}, 5);
-
 var page = E('div', { 'class': 'z2-page' }, [
 	E('div', { 'class': 'cbi-section' }, [
 		E('div', { 'class': 'cbi-section-node' }, [
@@ -1402,7 +1401,8 @@ var page = E('div', { 'class': 'z2-page' }, [
 				E('div', {}, [
 					E('h2', { 'style': 'margin:0 0 6px 0;' }, 'Zapret2')
 				]),
-				this.statusBadge
+				this.statusBadge,
+				this.btnRefresh
 			])
 		])
 	]),
@@ -1431,11 +1431,7 @@ var page = E('div', { 'class': 'z2-page' }, [
 					E('div', { 'class': 'z2-tabbar' }, [ this.tabVideo, this.tabMasq ]),
 					this.panelVideo,
 					this.panelMasq
-				]),
-				E('div', { 'class': 'z2-note' }, tr(
-					'The page refreshes automatically every 5 seconds.',
-					'Страница обновляется автоматически раз в 5 секунд.'
-				))
+				])
 			]),
 
 			E('div', { 'class': 'cbi-section' }, [
