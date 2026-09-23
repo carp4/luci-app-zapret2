@@ -1315,6 +1315,11 @@ return view.extend({
 		}, tr('Run comparison', 'Запустить сравнение'));
 		this.btnSpeedRun.disabled = true;
 		this.speedIfaceSelect = E('select', { 'class': 'cbi-input-select' });
+		// Picking an interface must flip RUN COMPARISON on. Without a
+		// change listener the enabled state is only recomputed on render
+		// (empty -> disabled), interface-checkbox clicks, and status polls,
+		// so selecting an uplink on a fresh page left the button grayed out.
+		this.speedIfaceSelect.addEventListener('change', function() { self.rebuildSpeedIfaceSelect(); });
 		this.ifaceRows = [];
 		this.ifaceBox = E('div', { 'class': 'z2-strat-box' });
 		this.speedBadge = E('span', { 'class': 'z2-badge z2-stopped' }, tr('Not run yet', 'Ещё не запускался'));
