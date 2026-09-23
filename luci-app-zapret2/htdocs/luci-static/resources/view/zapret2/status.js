@@ -1374,12 +1374,24 @@ return view.extend({
 			'click': ui.createHandlerFn(this, function() { return self.addHostRow('', true); })
 		}, tr('+ Add host', '+ Добавить хост'));
 
+		// Host editor commits reuse the same snapshot path as the Bypass
+		// recipe controls below (strategy + interfaces + hosts together), so
+		// the Video tab has an explicit way to make host edits stick.
+		this.btnHostSave = E('button', {
+			'class': 'btn cbi-button-save important',
+			'click': ui.createHandlerFn(this, function() { return self.handleSaveConfig(false); })
+		}, tr('Save', 'Сохранить'));
+		this.btnHostSaveApply = E('button', {
+			'class': 'btn cbi-button-action important',
+			'click': ui.createHandlerFn(this, function() { return self.handleSaveConfig(true); })
+		}, tr('Save & Apply', 'Сохранить и применить'));
+
 		this.panelVideo = E('div', { 'class': 'z2-panel z2-panel-open' }, [
 			E('div', { 'class': 'z2-switch-row' }, [
 				E('span', { 'class': 'z2-switch-label' }, tr('Video optimization', 'Оптимизация видео')),
 				this.sliderVoSwitch
 			]),
-			E('div', { 'class': 'z2-maint-card' }, [ this.hostListBox, E('div', { 'class': 'z2-maint-row' }, [ this.btnAddHost ]) ])
+			E('div', { 'class': 'z2-maint-card' }, [ this.hostListBox, E('div', { 'class': 'z2-maint-row' }, [ this.btnAddHost, this.btnHostSave, this.btnHostSaveApply ]) ])
 		]);
 		this.panelMasq = E('div', { 'class': 'z2-panel' }, [
 			E('div', { 'class': 'z2-switch-row' }, [
