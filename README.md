@@ -13,7 +13,9 @@ OpenWrt feed — no wrapper feed needed.
   list, `zapret2-speedtest` backend, nft counter tagging.
   Depends on `zapret2` (pulls the engine automatically).
 
-## Firmware builders
+## Building it into your firmware
+
+Add this repo as an OpenWrt feed and select the packages:
 
 ```
 echo "src-git zapret2 https://github.com/carp4/luci-app-zapret2.git" >> feeds.conf.default
@@ -21,21 +23,43 @@ echo "src-git zapret2 https://github.com/carp4/luci-app-zapret2.git" >> feeds.co
 ./scripts/feeds install -a -p zapret2
 ```
 
-Then `make menuconfig`: Network → Zapret → zapret2,
-LuCI → Services → Traffic Engine.
+Then in `make menuconfig`:
 
-## Stock devices (no build tree)
+- `Network → Zapret → zapret2` — the engine
+- `LuCI → Services → Traffic Engine` — the panel (pulls in `zapret2`)
 
-See Releases: download both `.apk` (25.12) / `.ipk` (24.10)
-for your arch and install together:
+Build your image as usual. The package format follows your OpenWrt
+version: 24.x produces `.ipk` (`zapret2_*.ipk`, `luci-app-zapret2_*.ipk`);
+25.x with `CONFIG_USE_APK=y` produces `.apk` (`zapret2-*.apk`,
+`luci-app-zapret2-*.apk`).
+
+## Installing on a running device (no build tree)
+
+Download both packages from [Releases](https://github.com/carp4/luci-app-zapret2/releases) and install them **together** — the
+panel depends on the engine (`zapret2`, `aarch64_cortex-a53`; the panel is
+arch-independent `all`).
+
+OpenWrt 25.x (APK):
 
 ```
 apk add --allow-untrusted ./zapret2-*.apk ./luci-app-zapret2-*.apk
+```
+
+OpenWrt 24.x (opkg):
+
+```
 opkg install ./zapret2_*.ipk ./luci-app-zapret2_*.ipk
 ```
 
-Engine installs disabled. Enable via the panel or
-`/etc/init.d/zapret2 enable && /etc/init.d/zapret2 start`.
+The engine installs **disabled** — first boot comes up with traffic
+processing off. Enable via the panel ("Services → Traffic Engine") or:
+
+```
+/etc/init.d/zapret2 enable && /etc/init.d/zapret2 start
+```
+
+Validated on OpenWrt 25.12.5 and GoldenOrb ROOter 24.10, including engine
+state persistence across a keep-settings sysupgrade.
 
 ## Tracking upstream
 

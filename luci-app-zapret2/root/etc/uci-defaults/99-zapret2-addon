@@ -1,7 +1,34 @@
 #!/bin/sh
 # First-boot addon policy for luci-app-zapret2.
-# Covers engines not shipped by our own feed package (e.g. a foreign or
-# future stock zapret2): ensure the DPI engine does not run until the
-# user opts in via Services -> Traffic Engine.
-[ -L /etc/rc.d/S21zapret2 ] && /etc/init.d/zapret2 disable 2>/dev/null
+#
+# Mirrors the live-install postinst so a FLASHED image reaches the same
+# state on first boot: postinst is skipped at image-bake time (IPKG_INSTROOT
+# is set), so without this the image boots with the stock engine init (UCI
+# config not applied, NFQWS2_ENABLE missing -> engine dead) and counter-less
+# nft.sh (packets read 0).
+#
+# 1) install our init override (UCI -> /opt/zapret2/config generator).
+#    Done as a file copy, NOT a package file: apk refuses two packages
+#    owning /etc/init.d/zapret2, while opkg silently overwrites.
+OVR=/usr/share/luci-app-zapret2/init.d-zapret2
+[ -f "$OVR" ] && {
+	cp -f "$OVR" /etc/init.d/zapret2
+	chmod 0755 /etc/init.d/zapret2
+}
+# 2) addon ships disabled: undo any enable+start from the engine install
+#    (covers foreign/stock engines; ours already disables itself).
+#    Exception: a keep-settings sysupgrade restores zapret2.main.enabled=1
+#    when the engine was on — honor that instead of force-disabling.
+if [ "$(uci -q get zapret2.main.enabled)" != "1" ]; then
+	[ -x /etc/init.d/zapret2 ] && {
+		/etc/init.d/zapret2 disable 2>/dev/null
+		/etc/init.d/zapret2 stop 2>/dev/null || true
+	}
+fi
+# 3) telemetry: tag stock queue rules with nft counter so
+#    `zapret2-speedtest packets` can read per-rule counters.
+#    Idempotent; skipped if the engine already ships counters.
+NFT_SH=/opt/zapret2/common/nft.sh
+[ -f "$NFT_SH" ] && ! grep -q 'counter queue num' "$NFT_SH" 2>/dev/null && \
+	sed -i 's/queue num /counter queue num /g' "$NFT_SH"
 exit 0

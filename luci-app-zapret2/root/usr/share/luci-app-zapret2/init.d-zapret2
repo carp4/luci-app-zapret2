@@ -176,6 +176,10 @@ ${strat}"
 	else
 		: > "$ZAPRET_BASE/ipset/zapret-hosts-user.txt"
 	fi
+	# the engine runs nfqws2 as WS_USER (daemon) and must read this list;
+	# the write above inherits the caller's umask (rpcd=0077 -> 0600) so pin
+	# it world-readable like the stock engine lists.
+	chmod 0644 "$ZAPRET_BASE/ipset/zapret-hosts-user.txt"
 
 	return 0
 }

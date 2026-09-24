@@ -708,7 +708,9 @@ return view.extend({
 			: tr('Traffic masquerade', 'Маскировка трафика');
 
 		// Turning OFF: stop + disable autorun, keep the saved scope so a
-		// later ON re-applies the same recipe without asking again.
+		// later ON re-applies the same recipe without asking again. The
+		// UCI enabled bit is set to 0 too so a later keep-settings
+		// sysupgrade restores "off" as well.
 		if (!checked) {
 			this.modeBusy = true;
 			return callInitAction('zapret2', 'stop').then(function(success) {
@@ -719,9 +721,14 @@ return view.extend({
 				if (!success)
 					throw new Error('Command failed');
 				self.mode = null;
-				self.syncModeSliders();
-				ui.addNotification(null, E('p', tr('%s is off', '%s выключен').format(label)));
-				return self.updateStatus();
+				var offState = self.collectState();
+				return self.saveUciState(offState).then(function() {
+					return self.applyStagedChanges();
+				}).then(function() {
+					self.syncModeSliders();
+					ui.addNotification(null, E('p', tr('%s is off', '%s выключен').format(label)));
+					return self.updateStatus();
+				});
 			}).catch(function(err) {
 				ui.addNotification(null, E('p', tr('Unable to turn off %s: %s', 'Не удалось выключить %s: %s').format(label, err.message || err)));
 			}).then(function() {
@@ -796,6 +803,7 @@ return view.extend({
 		}
 		var cov = this.ifaceCoverage();
 		return {
+			enabled: (this.mode === 'video' || this.mode === 'masq') ? '1' : '0',
 			// active mode wins; while the engine is off, fall back to the
 			// last saved scope so Save & Apply never silently flips it
 			hostsScope: (this.mode === 'video') ? true : (this.mode === 'masq') ? false : this.savedScopeHosts,
@@ -827,7 +835,12 @@ return view.extend({
 		var scopeVal = state.hostsScope ? 'hostlist' : 'all';
 		var strategyVal = (state.strategies || []).join(' ');
 		var hostVal = (state.hosts || []).join(' ');
+		var enabledVal = state.enabled === '1' ? '1' : '0';
 		var n = 0;
+		if ((cur.enabled || '0') !== enabledVal) {
+			uci.set('zapret2', 'main', 'enabled', enabledVal);
+			n++;
+		}
 		if ((cur.scope || 'all') !== scopeVal) {
 			uci.set('zapret2', 'main', 'scope', scopeVal);
 			n++;
@@ -1197,17 +1210,45 @@ return view.extend({
 				r.downNode.textContent = r.up ? '' : ('(' + tr('down', 'не в сети') + ')');
 		});
 
-		this.statusBadge.textContent = state.label;
-		this.statusBadge.className = 'z2-badge ' + state.className;
-		this.instancesValue.textContent = info.totalCount ? String(info.runningCount) + ' / ' + String(info.totalCount) : '0';
-		this.pidsValue.textContent = info.pids.length ? info.pids.join(', ') : '—';
+		// Live strip fields (badge / instances / PIDs / service state) shared
+		// with the 5s poll — see updateCoreStrip() below.
+		this.updateCoreStrip(info, state);
 		this.versionValue.textContent = versionText;
 		this.profileCountValue.textContent = info.profileCount ? String(info.profileCount) : '—';
 
 		// data[6] is the {code,stdout,stderr} result of `zapret2-speedtest
 		// packets`; read its stdout, not the wrapper object (parsing the
 		// object stringified the whole result -> always NaN -> card read 0).
-		var pktRes = data[6] || {};
+		this.updatePackets(data[6] || {});
+		this.commandArea.value = info.formattedCommand || '';
+		this.rulesArea.value = rulesText;
+		this.configArea.value = trimText(configText);
+
+		// The edit form (tabs / sliders / strategies / hosts / interfaces) is
+		// owned by the UCI config and is populated once in render(); status
+		// polls must never clobber an in-progress edit.
+
+		this.refreshSpeedStatus();
+		this.rebuildSpeedIfaceSelect();
+	},
+
+	updateCoreStrip: function(info, state) {
+		// Badge + instances + PIDs + service-running state. One writer shared
+		// by the full applyData() (initial load / manual Refresh) and the 5s
+		// poll so the live strip never diverges. textContent/display only —
+		// never touches any form or button DOM.
+		this.statusBadge.textContent = state.label;
+		this.statusBadge.className = 'z2-badge ' + state.className;
+		this.instancesValue.textContent = info.totalCount ? String(info.runningCount) + ' / ' + String(info.totalCount) : '0';
+		this.pidsValue.textContent = info.pids.length ? info.pids.join(', ') : '—';
+		this.serviceRunning = info.running;
+		if (this.speedWarn)
+			this.speedWarn.style.display = this.serviceRunning ? '' : 'none';
+	},
+
+	updatePackets: function(pktRes) {
+		// Parse the packets counter stdout and render count + rate. Kept with
+		// updateCoreStrip so the poll and applyData share identical logic.
 		var pkts = parseInt(String(pktRes.stdout != null ? pktRes.stdout : '').trim(), 10);
 		if (isNaN(pkts))
 			pkts = 0;
@@ -1222,19 +1263,28 @@ return view.extend({
 		}
 		this.pktLast = { t: nowTs, n: pkts };
 		this.packetsValue.textContent = pkts.toLocaleString() + (pktRate > 0 ? (' (' + pktRate + '/s)') : '');
-		this.commandArea.value = info.formattedCommand || '';
-		this.rulesArea.value = rulesText;
-		this.configArea.value = trimText(configText);
+	},
 
-		// The edit form (tabs / sliders / strategies / hosts / interfaces) is
-		// owned by the UCI config and is populated once in render(); status
-		// polls must never clobber an in-progress edit.
-		this.serviceRunning = info.running;
-		if (this.speedWarn)
-			this.speedWarn.style.display = this.serviceRunning ? '' : 'none';
-
-		this.refreshSpeedStatus();
-		this.rebuildSpeedIfaceSelect();
+	refreshLiveStrip: function() {
+		// Scoped 5s live status pickup: badge / instances / PIDs / packets
+		// from 3 cheap calls. Deliberately NOT the full fetchData() (8 RPCs
+		// per tick) whose request load r22 correlated with page instability —
+		// the heavy reads (config / queue rules / version) stay on manual
+		// Refresh. Speed json pickup runs alongside in the same poll tick.
+		var self = this;
+		return Promise.all([
+			callInitList('zapret2'),
+			callServiceList('zapret2', 1),
+			safeExec('/usr/sbin/zapret2-speedtest', [ 'packets' ])
+		]).then(function(d) {
+			var initList = d[0] || {};
+			var serviceList = d[1] || {};
+			var enabled = !!(initList.zapret2 && initList.zapret2.enabled);
+			var info = getServiceInfo(serviceList);
+			var state = getStateInfo(enabled, info);
+			self.updateCoreStrip(info, state);
+			self.updatePackets(d[2] || {});
+		});
 	},
 
 	render: function(data) {
@@ -1316,6 +1366,11 @@ return view.extend({
 		}, tr('Run comparison', 'Запустить сравнение'));
 		this.btnSpeedRun.disabled = true;
 		this.speedIfaceSelect = E('select', { 'class': 'cbi-input-select' });
+		// Picking an interface must flip RUN COMPARISON on. Without a
+		// change listener the enabled state is only recomputed on render
+		// (empty -> disabled), interface-checkbox clicks, and status polls,
+		// so selecting an uplink on a fresh page left the button grayed out.
+		this.speedIfaceSelect.addEventListener('change', function() { self.rebuildSpeedIfaceSelect(); });
 		this.ifaceRows = [];
 		this.ifaceBox = E('div', { 'class': 'z2-strat-box' });
 		this.speedBadge = E('span', { 'class': 'z2-badge z2-stopped' }, tr('Not run yet', 'Ещё не запускался'));
@@ -1363,6 +1418,10 @@ return view.extend({
 			'class': 'btn cbi-button-action important',
 			'click': ui.createHandlerFn(this, function() { return self.handleSaveConfig(true); })
 		}, tr('Save & Apply', 'Сохранить и применить'));
+		this.btnRefresh = E('button', {
+			'class': 'btn cbi-button-neutral',
+			'click': ui.createHandlerFn(this, function() { return self.updateStatus(); })
+		}, tr('Refresh', 'Обновить'));
 
 		this.hostListBox = E('div', { 'class': 'z2-hostlist-box' });
 		this.hostRows = [];
@@ -1371,12 +1430,24 @@ return view.extend({
 			'click': ui.createHandlerFn(this, function() { return self.addHostRow('', true); })
 		}, tr('+ Add host', '+ Добавить хост'));
 
+		// Host editor commits reuse the same snapshot path as the Bypass
+		// recipe controls below (strategy + interfaces + hosts together), so
+		// the Video tab has an explicit way to make host edits stick.
+		this.btnHostSave = E('button', {
+			'class': 'btn cbi-button-save important',
+			'click': ui.createHandlerFn(this, function() { return self.handleSaveConfig(false); })
+		}, tr('Save', 'Сохранить'));
+		this.btnHostSaveApply = E('button', {
+			'class': 'btn cbi-button-action important',
+			'click': ui.createHandlerFn(this, function() { return self.handleSaveConfig(true); })
+		}, tr('Save & Apply', 'Сохранить и применить'));
+
 		this.panelVideo = E('div', { 'class': 'z2-panel z2-panel-open' }, [
 			E('div', { 'class': 'z2-switch-row' }, [
 				E('span', { 'class': 'z2-switch-label' }, tr('Video optimization', 'Оптимизация видео')),
 				this.sliderVoSwitch
 			]),
-			E('div', { 'class': 'z2-maint-card' }, [ this.hostListBox, E('div', { 'class': 'z2-maint-row' }, [ this.btnAddHost ]) ])
+			E('div', { 'class': 'z2-maint-card' }, [ this.hostListBox, E('div', { 'class': 'z2-maint-row' }, [ this.btnAddHost, this.btnHostSave, this.btnHostSaveApply ]) ])
 		]);
 		this.panelMasq = E('div', { 'class': 'z2-panel' }, [
 			E('div', { 'class': 'z2-switch-row' }, [
@@ -1391,10 +1462,6 @@ return view.extend({
 			])
 		]);
 
-		poll.add(function() {
-			return self.updateStatus();
-		}, 5);
-
 var page = E('div', { 'class': 'z2-page' }, [
 	E('div', { 'class': 'cbi-section' }, [
 		E('div', { 'class': 'cbi-section-node' }, [
@@ -1402,7 +1469,8 @@ var page = E('div', { 'class': 'z2-page' }, [
 				E('div', {}, [
 					E('h2', { 'style': 'margin:0 0 6px 0;' }, 'Zapret2')
 				]),
-				this.statusBadge
+				this.statusBadge,
+				this.btnRefresh
 			])
 		])
 	]),
@@ -1431,11 +1499,7 @@ var page = E('div', { 'class': 'z2-page' }, [
 					E('div', { 'class': 'z2-tabbar' }, [ this.tabVideo, this.tabMasq ]),
 					this.panelVideo,
 					this.panelMasq
-				]),
-				E('div', { 'class': 'z2-note' }, tr(
-					'The page refreshes automatically every 5 seconds.',
-					'Страница обновляется автоматически раз в 5 секунд.'
-				))
+				])
 			]),
 
 			E('div', { 'class': 'cbi-section' }, [
@@ -1548,6 +1612,20 @@ var page = E('div', { 'class': 'z2-page' }, [
 
 		this.applyData(data);
 		this.rebuildSpeedIfaceSelect();
+
+		// Single 5s tick: the speed-comparison json pickup (r25) plus a
+		// scoped live status strip. The full updateStatus() poll (8 RPCs/
+		// tick) was removed in r22 after it correlated with the page
+		// instability and button churn; its real load culprit was the RPC
+		// count, so this merged tick stays light (json read + 3 status
+		// calls) and only writes textContent — never form or button DOM.
+		poll.add(function() {
+			return Promise.all([
+				self.refreshSpeedStatus(),
+				self.refreshLiveStrip()
+			]);
+		}, 5);
+
 		return page;
 	},
 
