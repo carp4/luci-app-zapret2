@@ -17,10 +17,14 @@ OVR=/usr/share/luci-app-zapret2/init.d-zapret2
 }
 # 2) addon ships disabled: undo any enable+start from the engine install
 #    (covers foreign/stock engines; ours already disables itself).
-[ -x /etc/init.d/zapret2 ] && {
-	/etc/init.d/zapret2 disable 2>/dev/null
-	/etc/init.d/zapret2 stop 2>/dev/null || true
-}
+#    Exception: a keep-settings sysupgrade restores zapret2.main.enabled=1
+#    when the engine was on — honor that instead of force-disabling.
+if [ "$(uci -q get zapret2.main.enabled)" != "1" ]; then
+	[ -x /etc/init.d/zapret2 ] && {
+		/etc/init.d/zapret2 disable 2>/dev/null
+		/etc/init.d/zapret2 stop 2>/dev/null || true
+	}
+fi
 # 3) telemetry: tag stock queue rules with nft counter so
 #    `zapret2-speedtest packets` can read per-rule counters.
 #    Idempotent; skipped if the engine already ships counters.

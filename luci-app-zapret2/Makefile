@@ -6,7 +6,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-zapret2
 PKG_VERSION:=0.2.0
-PKG_RELEASE:=28
+PKG_RELEASE:=29
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=Eduard Gushchin
 
@@ -37,10 +37,13 @@ if [ -z "$${IPKG_INSTROOT}" ]; then
 	}
 	# addon ships disabled: undo any enable+start from the engine install
 	# (covers foreign/stock engines; ours already disables itself).
-	[ -x /etc/init.d/zapret2 ] && {
-		/etc/init.d/zapret2 disable 2>/dev/null
-		/etc/init.d/zapret2 stop 2>/dev/null || true
-	}
+	# Exception: keep-settings restore with enabled=1 keeps the engine on.
+	if [ "$(uci -q get zapret2.main.enabled)" != "1" ]; then
+		[ -x /etc/init.d/zapret2 ] && {
+			/etc/init.d/zapret2 disable 2>/dev/null
+			/etc/init.d/zapret2 stop 2>/dev/null || true
+		}
+	fi
 	# telemetry: tag stock queue rules with nft counter so
 	# `zapret2-speedtest packets` can read per-rule counters.
 	# Idempotent; skipped if the engine already ships counters.

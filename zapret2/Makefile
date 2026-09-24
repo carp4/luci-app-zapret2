@@ -14,7 +14,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=zapret2
 PKG_VERSION:=1.0.5.2
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 PKG_SOURCE:=zapret2-v$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://github.com/bol-van/zapret2/releases/download/v$(PKG_VERSION)/
@@ -111,11 +111,14 @@ define Package/zapret2/postinst
 #!/bin/sh
 # zapret2 installs DISABLED: the APK default_postinst enables+starts any
 # init script with START= on a LIVE install. Undo that so a freshly added
-# package doesn't run until the user opts in. (First boot of flashed
-# images is handled by uci-defaults/99-zapret2-config.)
+# package doesn't run until the user opts in, UNLESS a keep-settings restore
+# carries zapret2.main.enabled=1 (engine was on -> honor it). First boot of
+# flashed images is handled by uci-defaults/99-zapret2-config.
 if [ -z "$${IPKG_INSTROOT}" ]; then
-	/etc/init.d/zapret2 disable 2>/dev/null
-	/etc/init.d/zapret2 stop 2>/dev/null || true
+	if [ "$(uci -q get zapret2.main.enabled)" != "1" ]; then
+		/etc/init.d/zapret2 disable 2>/dev/null
+		/etc/init.d/zapret2 stop 2>/dev/null || true
+	fi
 fi
 exit 0
 endef

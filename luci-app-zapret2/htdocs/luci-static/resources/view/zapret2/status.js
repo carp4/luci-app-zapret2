@@ -708,7 +708,9 @@ return view.extend({
 			: tr('Traffic masquerade', 'Маскировка трафика');
 
 		// Turning OFF: stop + disable autorun, keep the saved scope so a
-		// later ON re-applies the same recipe without asking again.
+		// later ON re-applies the same recipe without asking again. The
+		// UCI enabled bit is set to 0 too so a later keep-settings
+		// sysupgrade restores "off" as well.
 		if (!checked) {
 			this.modeBusy = true;
 			return callInitAction('zapret2', 'stop').then(function(success) {
@@ -719,9 +721,14 @@ return view.extend({
 				if (!success)
 					throw new Error('Command failed');
 				self.mode = null;
-				self.syncModeSliders();
-				ui.addNotification(null, E('p', tr('%s is off', '%s выключен').format(label)));
-				return self.updateStatus();
+				var offState = self.collectState();
+				return self.saveUciState(offState).then(function() {
+					return self.applyStagedChanges();
+				}).then(function() {
+					self.syncModeSliders();
+					ui.addNotification(null, E('p', tr('%s is off', '%s выключен').format(label)));
+					return self.updateStatus();
+				});
 			}).catch(function(err) {
 				ui.addNotification(null, E('p', tr('Unable to turn off %s: %s', 'Не удалось выключить %s: %s').format(label, err.message || err)));
 			}).then(function() {
@@ -796,6 +803,7 @@ return view.extend({
 		}
 		var cov = this.ifaceCoverage();
 		return {
+			enabled: (this.mode === 'video' || this.mode === 'masq') ? '1' : '0',
 			// active mode wins; while the engine is off, fall back to the
 			// last saved scope so Save & Apply never silently flips it
 			hostsScope: (this.mode === 'video') ? true : (this.mode === 'masq') ? false : this.savedScopeHosts,
@@ -827,7 +835,12 @@ return view.extend({
 		var scopeVal = state.hostsScope ? 'hostlist' : 'all';
 		var strategyVal = (state.strategies || []).join(' ');
 		var hostVal = (state.hosts || []).join(' ');
+		var enabledVal = state.enabled === '1' ? '1' : '0';
 		var n = 0;
+		if ((cur.enabled || '0') !== enabledVal) {
+			uci.set('zapret2', 'main', 'enabled', enabledVal);
+			n++;
+		}
 		if ((cur.scope || 'all') !== scopeVal) {
 			uci.set('zapret2', 'main', 'scope', scopeVal);
 			n++;

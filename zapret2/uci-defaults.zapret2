@@ -16,8 +16,14 @@ fi
 # make sure fd/nftables firewall init is present
 [ -x "$ZAPRET_BASE/init.d/openwrt/firewall.zapret2" ] || true
 
-# disabled by default: rm the rc.d S-link the image bakes in (START=21).
-# First boot therefore comes up "Off"; the LuCI panel's enable re-creates it.
-[ -L /etc/rc.d/S21zapret2 ] && /etc/init.d/zapret2 disable 2>/dev/null
+# disabled unless a keep-settings upgrade restored enabled=1: rm the rc.d
+# S-link the image bakes in (START=21). First boot therefore comes up
+# "Off"; the LuCI panel's enable re-creates it. When zapret2.main.enabled
+# is 1 the previous engine state is honored instead (auto-start at boot
+# with the restored scope), so a sysupgrade keep-settings keeps the engine
+# exactly where the user left it. Anything else (0, absent) = force off.
+if [ "$(uci -q get zapret2.main.enabled)" != "1" ]; then
+	[ -L /etc/rc.d/S21zapret2 ] && /etc/init.d/zapret2 disable 2>/dev/null
+fi
 
 exit 0
