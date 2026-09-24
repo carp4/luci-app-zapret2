@@ -2,6 +2,7 @@
 'require view';
 'require rpc';
 'require fs';
+'require poll';
 'require ui';
 'require uci';
 'require request';
@@ -1561,6 +1562,17 @@ var page = E('div', { 'class': 'z2-page' }, [
 
 		this.applyData(data);
 		this.rebuildSpeedIfaceSelect();
+
+		// Scoped speed-status pickup: poll ONLY the speed comparison json, not
+		// the full status (the old updateStatus() poll churned the recipe /
+		// Save controls — r22). The backend now writes phase:"setup"
+		// synchronously at start, so the first post-start read is truthful;
+		// this 5s pickup is the safety net that restores run progress/results
+		// display without re-rendering anything else on the page.
+		poll.add(function() {
+			return self.refreshSpeedStatus();
+		}, 5);
+
 		return page;
 	},
 

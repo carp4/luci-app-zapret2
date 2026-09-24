@@ -837,7 +837,11 @@ case "$verb" in
 			exit 0
 		fi
 		printf '%s\n' "$dev" > "$DPI_VERIFY_IFACE"
-		rm -f "$DPI_VERIFY_PID" "$DPI_VERIFY_FILE"
+		rm -f "$DPI_VERIFY_PID"
+		# Synchronous setup state: write the running json BEFORE backgrounding
+		# so the frontend's first read after `start` never lands on a deleted
+		# file. _run() overwrites this with phase:"reference" at entry.
+		_write "$(jq -n --arg if "$dev" '{status:"running",interface:$if,phase:"setup"}')"
 		setsid "$SELF" --run </dev/null >/dev/null 2>&1 &
 		echo $! > "$DPI_VERIFY_PID"
 		exit 0
