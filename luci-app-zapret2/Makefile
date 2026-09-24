@@ -6,7 +6,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-zapret2
 PKG_VERSION:=0.2.0
-PKG_RELEASE:=26
+PKG_RELEASE:=27
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=Eduard Gushchin
 
