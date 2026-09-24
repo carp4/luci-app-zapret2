@@ -1197,17 +1197,45 @@ return view.extend({
 				r.downNode.textContent = r.up ? '' : ('(' + tr('down', 'не в сети') + ')');
 		});
 
-		this.statusBadge.textContent = state.label;
-		this.statusBadge.className = 'z2-badge ' + state.className;
-		this.instancesValue.textContent = info.totalCount ? String(info.runningCount) + ' / ' + String(info.totalCount) : '0';
-		this.pidsValue.textContent = info.pids.length ? info.pids.join(', ') : '—';
+		// Live strip fields (badge / instances / PIDs / service state) shared
+		// with the 5s poll — see updateCoreStrip() below.
+		this.updateCoreStrip(info, state);
 		this.versionValue.textContent = versionText;
 		this.profileCountValue.textContent = info.profileCount ? String(info.profileCount) : '—';
 
 		// data[6] is the {code,stdout,stderr} result of `zapret2-speedtest
 		// packets`; read its stdout, not the wrapper object (parsing the
 		// object stringified the whole result -> always NaN -> card read 0).
-		var pktRes = data[6] || {};
+		this.updatePackets(data[6] || {});
+		this.commandArea.value = info.formattedCommand || '';
+		this.rulesArea.value = rulesText;
+		this.configArea.value = trimText(configText);
+
+		// The edit form (tabs / sliders / strategies / hosts / interfaces) is
+		// owned by the UCI config and is populated once in render(); status
+		// polls must never clobber an in-progress edit.
+
+		this.refreshSpeedStatus();
+		this.rebuildSpeedIfaceSelect();
+	},
+
+	updateCoreStrip: function(info, state) {
+		// Badge + instances + PIDs + service-running state. One writer shared
+		// by the full applyData() (initial load / manual Refresh) and the 5s
+		// poll so the live strip never diverges. textContent/display only —
+		// never touches any form or button DOM.
+		this.statusBadge.textContent = state.label;
+		this.statusBadge.className = 'z2-badge ' + state.className;
+		this.instancesValue.textContent = info.totalCount ? String(info.runningCount) + ' / ' + String(info.totalCount) : '0';
+		this.pidsValue.textContent = info.pids.length ? info.pids.join(', ') : '—';
+		this.serviceRunning = info.running;
+		if (this.speedWarn)
+			this.speedWarn.style.display = this.serviceRunning ? '' : 'none';
+	},
+
+	updatePackets: function(pktRes) {
+		// Parse the packets counter stdout and render count + rate. Kept with
+		// updateCoreStrip so the poll and applyData share identical logic.
 		var pkts = parseInt(String(pktRes.stdout != null ? pktRes.stdout : '').trim(), 10);
 		if (isNaN(pkts))
 			pkts = 0;
@@ -1222,19 +1250,28 @@ return view.extend({
 		}
 		this.pktLast = { t: nowTs, n: pkts };
 		this.packetsValue.textContent = pkts.toLocaleString() + (pktRate > 0 ? (' (' + pktRate + '/s)') : '');
-		this.commandArea.value = info.formattedCommand || '';
-		this.rulesArea.value = rulesText;
-		this.configArea.value = trimText(configText);
+	},
 
-		// The edit form (tabs / sliders / strategies / hosts / interfaces) is
-		// owned by the UCI config and is populated once in render(); status
-		// polls must never clobber an in-progress edit.
-		this.serviceRunning = info.running;
-		if (this.speedWarn)
-			this.speedWarn.style.display = this.serviceRunning ? '' : 'none';
-
-		this.refreshSpeedStatus();
-		this.rebuildSpeedIfaceSelect();
+	refreshLiveStrip: function() {
+		// Scoped 5s live status pickup: badge / instances / PIDs / packets
+		// from 3 cheap calls. Deliberately NOT the full fetchData() (8 RPCs
+		// per tick) whose request load r22 correlated with page instability —
+		// the heavy reads (config / queue rules / version) stay on manual
+		// Refresh. Speed json pickup runs alongside in the same poll tick.
+		var self = this;
+		return Promise.all([
+			callInitList('zapret2'),
+			callServiceList('zapret2', 1),
+			safeExec('/usr/sbin/zapret2-speedtest', [ 'packets' ])
+		]).then(function(d) {
+			var initList = d[0] || {};
+			var serviceList = d[1] || {};
+			var enabled = !!(initList.zapret2 && initList.zapret2.enabled);
+			var info = getServiceInfo(serviceList);
+			var state = getStateInfo(enabled, info);
+			self.updateCoreStrip(info, state);
+			self.updatePackets(d[2] || {});
+		});
 	},
 
 	render: function(data) {
@@ -1563,14 +1600,17 @@ var page = E('div', { 'class': 'z2-page' }, [
 		this.applyData(data);
 		this.rebuildSpeedIfaceSelect();
 
-		// Scoped speed-status pickup: poll ONLY the speed comparison json, not
-		// the full status (the old updateStatus() poll churned the recipe /
-		// Save controls — r22). The backend now writes phase:"setup"
-		// synchronously at start, so the first post-start read is truthful;
-		// this 5s pickup is the safety net that restores run progress/results
-		// display without re-rendering anything else on the page.
+		// Single 5s tick: the speed-comparison json pickup (r25) plus a
+		// scoped live status strip. The full updateStatus() poll (8 RPCs/
+		// tick) was removed in r22 after it correlated with the page
+		// instability and button churn; its real load culprit was the RPC
+		// count, so this merged tick stays light (json read + 3 status
+		// calls) and only writes textContent — never form or button DOM.
 		poll.add(function() {
-			return self.refreshSpeedStatus();
+			return Promise.all([
+				self.refreshSpeedStatus(),
+				self.refreshLiveStrip()
+			]);
 		}, 5);
 
 		return page;
