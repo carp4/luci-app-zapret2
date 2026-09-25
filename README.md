@@ -13,6 +13,17 @@ OpenWrt feed — no wrapper feed needed.
   list, `zapret2-speedtest` backend, nft counter tagging.
   Depends on `zapret2` (pulls the engine automatically).
 
+## Screenshots
+
+Services → "Traffic Engine" panel:
+
+- ![Menu entry](screenshots/menu.png)
+- ![Status bar](screenshots/status-bar.png)
+- ![Video optimizer](screenshots/video-optimizer.png)
+- ![Traffic masquerade](screenshots/traffic-masquerade.png)
+- ![Speed comparison](screenshots/speed-comparison.png)
+- ![Bypass recipe](screenshots/bypass-recipe.png)
+
 ## Building it into your firmware
 
 Add this repo as an OpenWrt feed and select the packages:
