@@ -14,7 +14,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=zapret2
 PKG_VERSION:=1.0.5.2
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 PKG_SOURCE:=zapret2-v$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://github.com/bol-van/zapret2/releases/download/v$(PKG_VERSION)/
@@ -48,7 +48,7 @@ define Package/zapret2
 	TITLE:=zapret2 - anti-DPI engine (nfqws2) with full runtime
 	SUBMENU:=Zapret
 	URL:=https://github.com/bol-van/zapret2
-	DEPENDS:=+libnetfilter-queue +kmod-nfnetlink-queue +libmnl +libcap +zlib +$(LUA_DEP)
+	DEPENDS:=+libnetfilter-queue +kmod-nfnetlink-queue +kmod-nft-queue +libmnl +libcap +zlib +$(LUA_DEP)
 endef
 
 define Package/zapret2/description
